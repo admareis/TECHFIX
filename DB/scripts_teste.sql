@@ -183,6 +183,37 @@ FROM pecas WHERE preco_venda >= 10000;
 
 SELECT * FROM vw_preco_venda_maior_100;
 
+CREATE TABLE forma_pagamento (
+id INTEGER PRIMARY KEY AUTOINCREMENT,
+nome_forma_pagamento TEXT NOT NULL COLLATE NOCASE UNIQUE,
+id_funcionario INTEGER NOT NULL,
+id_funcionario_cargo INTEGER NOT NULL CHECK (id_funcionario_cargo=1),
+data_cadastro TEXT NOT NULL DEFAULT (DATETIME('now', 'localtime')),
+status INTEGER NOT NULL DEFAULT 1, 
+FOREIGN KEY (id_funcionario, id_funcionario_cargo) REFERENCES funcionario(id, id_cargo)
+)STRICT;
+
+CREATE TABLE situacao (
+id INTEGER PRIMARY KEY AUTOINCREMENT,
+nome_situacao TEXT NOT NULL COLLATE NOCASE UNIQUE,
+status INTEGER NOT NULL DEFAULT 1
+)STRICT;
+
+CREATE TABLE ordem_peca (
+id INTEGER PRIMARY KEY AUTOINCREMENT,
+status INTEGER NOT NULL DEFAULT 1, 
+id_ordem INTEGER NOT NULL, 
+id_peca INTEGER NOT NULL, 
+quantidade INTEGER NOT NULL, 
+valor_unitario INTEGER NOT NULL,
+id_tecnico INTEGER NOT NULL, 
+id_tecnico_cargo INTEGER NOT NULL CHECK (id_tecnico_cargo = 3),
+data_situacao TEXT NOT NULL DEFAULT (DATETIME('now', 'localtime')),
+FOREIGN KEY (id_tecnico, id_tecnico_cargo) REFERENCES funcionario(id, id_cargo)
+) STRICT;
+
+
+
 
 
 
