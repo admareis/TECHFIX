@@ -44,7 +44,7 @@ FOREIGN KEY (id_funcionario, id_funcionario_cargo) REFERENCES funcionario(id, id
 ) STRICT;
 
 INSERT INTO cliente (nome_cliente, email, telefone, id_funcionario, id_funcionario_cargo) 
-VALUES ('João','email@email.com', '11999999999', 6,(SELECT id_cargo FROM funcionario WHERE id=2));
+VALUES ('João','email@email.com', '11999999999', 4, 2);
 
 CREATE TABLE categorias (
 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -67,7 +67,7 @@ id_funcionario INTEGER NOT NULL,
 id_funcionario_cargo INTEGER NOT NULL CHECK (id_funcionario_cargo=1 OR id_funcionario_cargo=2), -- O CHECK AVALIA SE O USUARIO INSERIDO TEM O ID DE CARGO DEFINIDO NA TABELA DE FUNCIONARIO PERMITIDO -- 
 data_cadastro TEXT NOT NULL DEFAULT (DATETIME ('now', 'localtime')),
 FOREIGN KEY (id_funcionario, id_funcionario_cargo) REFERENCES funcionario(id, id_cargo),
-FOREIGN KEY (id_categorias) REFERENCES categorias(id, id_cargo)
+FOREIGN KEY (id_categorias) REFERENCES categorias(id)
 )STRICT;
 
 INSERT INTO categorias (nome_categorias, id_funcionario, id_funcionario_cargo) 
@@ -121,7 +121,6 @@ CREATE TABLE pecas (
 id INTEGER PRIMARY KEY AUTOINCREMENT,
 nome_pecas TEXT NOT NULL COLLATE NOCASE UNIQUE,
 id_categorias INTEGER NOT NULL,
-preco_compra INTEGER NOT NULL,
 preco_venda INTEGER NOT NULL, 
 estoque_atual INTEGER NOT NULL, 
 status INTEGER NOT NULL DEFAULT 1,
@@ -132,48 +131,45 @@ FOREIGN KEY (id_funcionario, id_funcionario_cargo) REFERENCES funcionario(id, id
 FOREIGN KEY (id_categorias) REFERENCES categorias(id)
 ) STRICT;
 
-INSERT INTO pecas (nome_pecas, id_categorias, preco_compra, preco_venda, estoque_atual, id_funcionario, id_funcionario_cargo) VALUES
+INSERT INTO pecas (nome_pecas, id_categorias, preco_venda, estoque_atual, id_funcionario, id_funcionario_cargo) VALUES
 -- Informática / Computadores
-('SSD NVMe 512GB M.2', (SELECT id FROM categorias WHERE nome_categorias = 'informática'), 14000, 26000, 15, 1, 1),
-('SSD SATA III 480GB 2.5"', (SELECT id FROM categorias WHERE nome_categorias = 'informática'), 11000, 21000, 20, 1, 1),
-('Memória RAM DDR4 8GB 2666MHz (Notebook)', (SELECT id FROM categorias WHERE nome_categorias = 'informática'), 9000, 17000, 12, 1, 1),
-('Memória RAM DDR4 16GB 3200MHz (Desktop)', (SELECT id FROM categorias WHERE nome_categorias = 'informática'), 18000, 32000, 8, 1, 1),
-('Pasta Térmica de Alta Performance (Bisnaga 4g)', (SELECT id FROM categorias WHERE nome_categorias = 'insumos'), 2500, 6000, 25, 1, 1),
-('Fonte ATX 500W 80 Plus Bronze', (SELECT id FROM categorias WHERE nome_categorias = 'informática'), 19000, 34000, 6, 1, 1),
-('Bateria Célula Moeda CR2032 (Cartela c/ 5)', (SELECT id FROM categorias WHERE nome_categorias = 'insumos'), 800, 2500, 30, 1, 1),
-('Cooler para Processador Socket Universal', (SELECT id FROM categorias WHERE nome_categorias = 'informática'), 4500, 9500, 10, 1, 1),
-('Cabo SATA III 6Gbps 50cm', (SELECT id FROM categorias WHERE nome_categorias = 'acessórios'), 300, 1500, 50, 1, 1),
-('Tela LED 15.6" Slim 30 Pinos Full HD', (SELECT id FROM categorias WHERE nome_categorias = 'telas'), 28000, 48000, 5, 1, 1),
-
+('SSD NVMe 512GB M.2', (SELECT id FROM categorias WHERE nome_categorias = 'informática'), 26000, 15, 1, 1),
+('SSD SATA III 480GB 2.5"', (SELECT id FROM categorias WHERE nome_categorias = 'informática'), 21000, 20, 1, 1),
+('Memória RAM DDR4 8GB 2666MHz (Notebook)', (SELECT id FROM categorias WHERE nome_categorias = 'informática'), 17000, 12, 1, 1),
+('Memória RAM DDR4 16GB 3200MHz (Desktop)', (SELECT id FROM categorias WHERE nome_categorias = 'informática'), 32000, 8, 1, 1),
+('Pasta Térmica de Alta Performance (Bisnaga 4g)', (SELECT id FROM categorias WHERE nome_categorias = 'insumos'), 6000, 25, 1, 1),
+('Fonte ATX 500W 80 Plus Bronze', (SELECT id FROM categorias WHERE nome_categorias = 'informática'), 34000, 6, 1, 1),
+('Bateria Célula Moeda CR2032 (Cartela c/ 5)', (SELECT id FROM categorias WHERE nome_categorias = 'insumos'), 2500, 30, 1, 1),
+('Cooler para Processador Socket Universal', (SELECT id FROM categorias WHERE nome_categorias = 'informática'), 9500, 10, 1, 1),
+('Cabo SATA III 6Gbps 50cm', (SELECT id FROM categorias WHERE nome_categorias = 'acessórios'), 1500, 50, 1, 1),
+('Tela LED 15.6" Slim 30 Pinos Full HD', (SELECT id FROM categorias WHERE nome_categorias = 'telas'), 48000, 5, 1, 1),
 -- Smartphones / Celulares
-('Display Frontal Completo iPhone 11', (SELECT id FROM categorias WHERE nome_categorias = 'telas'), 18000, 35000, 4, 1, 1),
-('Display Frontal Completo Samsung Galaxy A54', (SELECT id FROM categorias WHERE nome_categorias = 'telas'), 16000, 31000, 6, 1, 1),
-('Display Frontal Completo Motorola Moto G84', (SELECT id FROM categorias WHERE nome_categorias = 'telas'), 14000, 28000, 5, 1, 1),
-('Bateria Compatível iPhone 11 (3110mAh)', (SELECT id FROM categorias WHERE nome_categorias = 'baterias'), 7500, 16000, 8, 1, 1),
-('Bateria Compatível Samsung Galaxy A32', (SELECT id FROM categorias WHERE nome_categorias = 'baterias'), 6000, 13000, 7, 1, 1),
-('Bateria Compatível Moto G30', (SELECT id FROM categorias WHERE nome_categorias = 'baterias'), 5500, 12000, 6, 1, 1),
-('Conector de Carga Type-C Universal (Unidade)', (SELECT id FROM categorias WHERE nome_categorias = 'componentes'), 250, 2000, 100, 1, 1),
-('Conector de Carga Micro USB V8', (SELECT id FROM categorias WHERE nome_categorias = 'componentes'), 150, 1500, 100, 1, 1),
-('Flex de Carga e Microfone Moto G9 Play', (SELECT id FROM categorias WHERE nome_categorias = 'componentes'), 1800, 5500, 10, 1, 1),
-('Tampa Traseira de Vidro iPhone 12', (SELECT id FROM categorias WHERE nome_categorias = 'carcaças'), 4000, 11000, 4, 1, 1),
-('Câmera Traseira Principal Redmi Note 11', (SELECT id FROM categorias WHERE nome_categorias = 'componentes'), 6500, 14000, 3, 1, 1),
-('Alto-Falante Auricular Universal', (SELECT id FROM categorias WHERE nome_categorias = 'componentes'), 500, 2500, 40, 1, 1),
-
+('Display Frontal Completo iPhone 11', (SELECT id FROM categorias WHERE nome_categorias = 'telas'), 35000, 4, 1, 1),
+('Display Frontal Completo Samsung Galaxy A54', (SELECT id FROM categorias WHERE nome_categorias = 'telas'), 31000, 6, 1, 1),
+('Display Frontal Completo Motorola Moto G84', (SELECT id FROM categorias WHERE nome_categorias = 'telas'), 28000, 5, 1, 1),
+('Bateria Compatível iPhone 11 (3110mAh)', (SELECT id FROM categorias WHERE nome_categorias = 'baterias'), 16000, 8, 1, 1),
+('Bateria Compatível Samsung Galaxy A32', (SELECT id FROM categorias WHERE nome_categorias = 'baterias'), 13000, 7, 1, 1),
+('Bateria Compatível Moto G30', (SELECT id FROM categorias WHERE nome_categorias = 'baterias'), 12000, 6, 1, 1),
+('Conector de Carga Type-C Universal (Unidade)', (SELECT id FROM categorias WHERE nome_categorias = 'componentes'), 2000, 100, 1, 1),
+('Conector de Carga Micro USB V8', (SELECT id FROM categorias WHERE nome_categorias = 'componentes'), 1500, 100, 1, 1),
+('Flex de Carga e Microfone Moto G9 Play', (SELECT id FROM categorias WHERE nome_categorias = 'componentes'), 5500, 10, 1, 1),
+('Tampa Traseira de Vidro iPhone 12', (SELECT id FROM categorias WHERE nome_categorias = 'carcaças'), 11000, 4, 1, 1),
+('Câmera Traseira Principal Redmi Note 11', (SELECT id FROM categorias WHERE nome_categorias = 'componentes'), 14000, 3, 1, 1),
+('Alto-Falante Auricular Universal', (SELECT id FROM categorias WHERE nome_categorias = 'componentes'), 2500, 40, 1, 1),
 -- Smart TVs
-('Barra de LED TV Samsung 50" (Kit com 3 barras)', (SELECT id FROM categorias WHERE nome_categorias = 'tvs'), 11000, 23000, 4, 1, 1),
-('Barra de LED TV LG 43" (Kit com 3 barras)', (SELECT id FROM categorias WHERE nome_categorias = 'tvs'), 9500, 19500, 5, 1, 1),
-('Placa Fonte TV Samsung UN50TU8000', (SELECT id FROM categorias WHERE nome_categorias = 'tvs'), 16000, 31000, 2, 1, 1),
-('Placa Principal TV LG 43UP7500', (SELECT id FROM categorias WHERE nome_categorias = 'tvs'), 21000, 42000, 2, 1, 1),
-('Cabo Flat T-Con para Display TV 55"', (SELECT id FROM categorias WHERE nome_categorias = 'tvs'), 2200, 6500, 8, 1, 1),
-('Receptor Infravermelho para Controle Remoto TV', (SELECT id FROM categorias WHERE nome_categorias = 'componentes'), 400, 2000, 15, 1, 1),
-
+('Barra de LED TV Samsung 50" (Kit com 3 barras)', (SELECT id FROM categorias WHERE nome_categorias = 'tvs'), 23000, 4, 1, 1),
+('Barra de LED TV LG 43" (Kit com 3 barras)', (SELECT id FROM categorias WHERE nome_categorias = 'tvs'), 19500, 5, 1, 1),
+('Placa Fonte TV Samsung UN50TU8000', (SELECT id FROM categorias WHERE nome_categorias = 'tvs'), 31000, 2, 1, 1),
+('Placa Principal TV LG 43UP7500', (SELECT id FROM categorias WHERE nome_categorias = 'tvs'), 42000, 2, 1, 1),
+('Cabo Flat T-Con para Display TV 55"', (SELECT id FROM categorias WHERE nome_categorias = 'tvs'), 6500, 8, 1, 1),
+('Receptor Infravermelho para Controle Remoto TV', (SELECT id FROM categorias WHERE nome_categorias = 'componentes'), 2000, 15, 1, 1),
 -- Insumos e Componentes Genéricos
-('Solda em Fio Sn60/Pb40 0.8mm (Carretel 500g)', (SELECT id FROM categorias WHERE nome_categorias = 'insumos'), 8500, 15000, 3, 1, 1),
-('Álcool Isopropílico 99.8% 1 Litro', (SELECT id FROM categorias WHERE nome_categorias = 'insumos'), 2200, 4500, 12, 1, 1),
-('Fita Kapton Térmica 10mm x 33m', (SELECT id FROM categorias WHERE nome_categorias = 'insumos'), 1200, 3000, 15, 1, 1),
-('Fita Dupla Face Fixação de Telas (3mm x 50m)', (SELECT id FROM categorias WHERE nome_categorias = 'insumos'), 1500, 3500, 10, 1, 1),
-('Fusível de Louça 5A 250V (Pacote c/ 10)', (SELECT id FROM categorias WHERE nome_categorias = 'componentes'), 500, 1800, 20, 1, 1),
-('Capacitor Eletrolítico 1000uF x 25V', (SELECT id FROM categorias WHERE nome_categorias = 'componentes'), 80, 500, 150, 1, 1);
+('Solda em Fio Sn60/Pb40 0.8mm (Carretel 500g)', (SELECT id FROM categorias WHERE nome_categorias = 'insumos'), 15000, 3, 1, 1),
+('Álcool Isopropílico 99.8% 1 Litro', (SELECT id FROM categorias WHERE nome_categorias = 'insumos'), 4500, 12, 1, 1),
+('Fita Kapton Térmica 10mm x 33m', (SELECT id FROM categorias WHERE nome_categorias = 'insumos'), 3000, 15, 1, 1),
+('Fita Dupla Face Fixação de Telas (3mm x 50m)', (SELECT id FROM categorias WHERE nome_categorias = 'insumos'), 3500, 10, 1, 1),
+('Fusível de Louça 5A 250V (Pacote c/ 10)', (SELECT id FROM categorias WHERE nome_categorias = 'componentes'), 1800, 20, 1, 1),
+('Capacitor Eletrolítico 1000uF x 25V', (SELECT id FROM categorias WHERE nome_categorias = 'componentes'), 500, 150, 1, 1);
 
 SELECT * FROM pecas WHERE preco_venda >= 10000;
 
@@ -207,20 +203,22 @@ nome_situacao TEXT NOT NULL COLLATE NOCASE UNIQUE,
 status INTEGER NOT NULL DEFAULT 1
 )STRICT;
 
-INSERT INTO situacao (nome_situacao) VALUES 
+INSERT OR IGNORE INTO situacao (nome_situacao) VALUES 
 ('Aberto'),
 ('Em Diagnóstico'),
 ('Orçamento Aprovado'),
 ('Em Reparo'),
 ('Pronto'),
 ('Entregue'),
-('Cancelado');
+('Cancelado'),
+('Uso em Reparo'),
+('Descarte por Defeito/Avaria');
 
 CREATE TABLE ordem (
 id INTEGER PRIMARY KEY AUTOINCREMENT,
 id_equipamento INTEGER NOT NULL,
 id_funcionario_abertura INTEGER NOT NULL,
-id_funcionario_cargo_abertura INTEGER NOT NULL CHECK (id_funcionario_cargo_abertura = 1), -- Assumindo 1 para gerente
+id_funcionario_cargo_abertura INTEGER NOT NULL CHECK (id_funcionario_cargo_abertura = 1 OR id_funcionario_cargo_abertura = 2), -- Assumindo 1 para gerente
 defeito_relatado TEXT NOT NULL COLLATE NOCASE,
 defeito_constatado TEXT COLLATE NOCASE,
 data_abertura TEXT NOT NULL DEFAULT (DATETIME('now', 'localtime')),
@@ -232,10 +230,17 @@ id_tecnico INTEGER NOT NULL,
 id_tecnico_cargo INTEGER NOT NULL CHECK (id_tecnico_cargo = 3),
 FOREIGN KEY (id_equipamento) REFERENCES equipamento(id),
 FOREIGN KEY (id_funcionario_abertura, id_funcionario_cargo_abertura) REFERENCES funcionario(id, id_cargo),
-FOREIGN KEY (id_situacao_atual) REFERENCES nome_situacao(id),
+FOREIGN KEY (id_situacao_atual) REFERENCES situacao(id),
 FOREIGN KEY (id_forma_pagamento) REFERENCES forma_pagamento(id),
 FOREIGN KEY (id_tecnico, id_tecnico_cargo) REFERENCES funcionario(id, id_cargo)
 ) STRICT;
+
+INSERT INTO ordem (id_equipamento, id_funcionario_abertura, id_funcionario_cargo_abertura, defeito_relatado, defeito_constatado, id_situacao_atual, valor_total, id_forma_pagamento, id_tecnico, id_tecnico_cargo) VALUES 
+-- Ordem 1: iPhone 13 (Equipamento 1) - Finalizada (Entregue = 6)
+(1, 5, 2, 'Tela trincada após queda', 'Display LCD e Touch danificados', 6, 37500, 2, 6, 3),
+
+-- Ordem 2: Notebook Dell (Equipamento 2) - Em Reparo (Em Reparo = 4)
+(2, 5, 2, 'Notebook muito lento', 'HD Mecânico defeituoso e pouca RAM', 4, 55000, 1, 6, 3);
 
 CREATE TABLE ordem_peca (
 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -243,39 +248,31 @@ id_ordem INTEGER NOT NULL,
 id_peca INTEGER NOT NULL, 
 quantidade INTEGER NOT NULL, 
 valor_unitario INTEGER NOT NULL,
-id_tecnico INTEGER NOT NULL, 
-id_tecnico_cargo INTEGER NOT NULL CHECK (id_tecnico_cargo = 3),
 data_situacao TEXT NOT NULL DEFAULT (DATETIME('now', 'localtime')),
 FOREIGN KEY (id_ordem) REFERENCES ordem(id),
-FOREIGN KEY (id_peca) REFERENCES peca(id),
-FOREIGN KEY (id_tecnico, id_tecnico_cargo) REFERENCES funcionario(id, id_cargo)
+FOREIGN KEY (id_peca) REFERENCES pecas(id)
 ) STRICT;
 
 CREATE TABLE ordem_situacao (
 id INTEGER PRIMARY KEY AUTOINCREMENT,
 id_ordem INTEGER NOT NULL,
 id_nome_situacao INTEGER NOT NULL,
-valor_situacao INTEGER NOT NULL,
-id_tecnico INTEGER NOT NULL,
-id_tecnico_cargo INTEGER NOT NULL CHECK (id_tecnico_cargo = 3),
+id_funcionario INTEGER NOT NULL,
 data_situacao TEXT NOT NULL DEFAULT (DATETIME('now', 'localtime')),
 FOREIGN KEY (id_ordem) REFERENCES ordem(id),
-FOREIGN KEY (id_nome_situacao) REFERENCES nome_situacao(id),
-FOREIGN KEY (id_tecnico, id_tecnico_cargo) REFERENCES funcionario(id, id_cargo)
+FOREIGN KEY (id_nome_situacao) REFERENCES situacao(id),
+FOREIGN KEY (id_funcionario) REFERENCES funcionario(id)
 ) STRICT;
 
 CREATE TABLE ordem_servico (
 id INTEGER PRIMARY KEY AUTOINCREMENT,
 id_ordem INTEGER NOT NULL,
-id_nome_servico INTEGER NOT NULL,
+id_servico INTEGER NOT NULL,
 valor_unitario INTEGER NOT NULL,
-quantidade INTEGER NOT NULL,
-id_tecnico INTEGER NOT NULL,
-id_tecnico_cargo INTEGER NOT NULL CHECK (id_tecnico_cargo = 3),
+quantidade_servico INTEGER NOT NULL,
 data_execucao TEXT NOT NULL DEFAULT (DATETIME('now', 'localtime')),
 FOREIGN KEY (id_ordem) REFERENCES ordem(id),
-FOREIGN KEY (id_nome_servico) REFERENCES nome_servico(id),
-FOREIGN KEY (id_tecnico, id_tecnico_cargo) REFERENCES funcionario(id, id_cargo)
+FOREIGN KEY (id_servico) REFERENCES servico(id)
 ) STRICT;
 
 CREATE TABLE marca (
@@ -348,5 +345,16 @@ FOREIGN KEY (id_modelo) REFERENCES modelo(id),
 FOREIGN KEY (id_marca) REFERENCES marca(id),
 FOREIGN KEY (id_tipo) REFERENCES tipo(id)
 )STRICT;
+
+INSERT INTO equipamento (serial_number, imei, id_cliente, id_funcionario, id_funcionario_cargo, id_modelo, id_marca, id_tipo) VALUES 
+('SN-APP-998877', '351234567890123', 1, 4, 2, 1, 1, 1), -- iPhone 13 / Apple / Smartphone
+('SN-DELL-554433', NULL, 1, 4, 2, 3, 3, 2),             -- Inspiron 15 / Dell / Notebook
+('SN-SAMSUNG-112', '359876543210987', 1, 4, 2, 2, 2, 1);  -- Galaxy S23 / Samsung / Smartphone
+
+INSERT INTO servico (nome_servico, id_categorias, preco_base, horas_servico, id_funcionario, id_funcionario_cargo) VALUES
+('Instalação de Pacote Office / Softwares Básicos', (SELECT id FROM categorias WHERE nome_categorias = 'informática'), 5000, 1.0, 1, 1),
+('Troca de Teclado Interno de Notebook', (SELECT id FROM categorias WHERE nome_categorias = 'informática'), 12000, 1.5, 1, 1),
+('Aplicação de Película Protetora (Vidro/Cerâmica)', (SELECT id FROM categorias WHERE nome_categorias = 'acessórios'), 2500, 0.3, 1, 1),
+('Backup de Dados Preventivo (Até 500GB)', (SELECT id FROM categorias WHERE nome_categorias = 'informática'), 8000, 2.0, 1, 1);
 
 
