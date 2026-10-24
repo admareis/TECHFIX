@@ -238,7 +238,6 @@ FOREIGN KEY (id_tecnico, id_tecnico_cargo) REFERENCES funcionario(id, id_cargo)
 INSERT INTO ordem (id_equipamento, id_funcionario_abertura, id_funcionario_cargo_abertura, defeito_relatado, defeito_constatado, id_situacao_atual, valor_total, id_forma_pagamento, id_tecnico, id_tecnico_cargo) VALUES 
 -- Ordem 1: iPhone 13 (Equipamento 1) - Finalizada (Entregue = 6)
 (1, 5, 2, 'Tela trincada após queda', 'Display LCD e Touch danificados', 6, 37500, 2, 6, 3),
-
 -- Ordem 2: Notebook Dell (Equipamento 2) - Em Reparo (Em Reparo = 4)
 (2, 5, 2, 'Notebook muito lento', 'HD Mecânico defeituoso e pouca RAM', 4, 55000, 1, 6, 3);
 
@@ -351,10 +350,54 @@ INSERT INTO equipamento (serial_number, imei, id_cliente, id_funcionario, id_fun
 ('SN-DELL-554433', NULL, 1, 4, 2, 3, 3, 2),             -- Inspiron 15 / Dell / Notebook
 ('SN-SAMSUNG-112', '359876543210987', 1, 4, 2, 2, 2, 1);  -- Galaxy S23 / Samsung / Smartphone
 
-INSERT INTO servico (nome_servico, id_categorias, preco_base, horas_servico, id_funcionario, id_funcionario_cargo) VALUES
-('Instalação de Pacote Office / Softwares Básicos', (SELECT id FROM categorias WHERE nome_categorias = 'informática'), 5000, 1.0, 1, 1),
-('Troca de Teclado Interno de Notebook', (SELECT id FROM categorias WHERE nome_categorias = 'informática'), 12000, 1.5, 1, 1),
-('Aplicação de Película Protetora (Vidro/Cerâmica)', (SELECT id FROM categorias WHERE nome_categorias = 'acessórios'), 2500, 0.3, 1, 1),
-('Backup de Dados Preventivo (Até 500GB)', (SELECT id FROM categorias WHERE nome_categorias = 'informática'), 8000, 2.0, 1, 1);
+-- INSERT na tabela de serviços (utilizando a sintaxe compatível para evitar o erro near "(" )
+INSERT INTO servico (nome_servico, id_categorias, preco_base, horas_servico, id_funcionario, id_funcionario_cargo)
+SELECT 'Instalação de Pacote Office / Softwares Básicos', (SELECT id FROM categorias WHERE nome_categorias = 'informática'), 5000, 1.0, 1, 1 UNION ALL
+SELECT 'Troca de Teclado Interno de Notebook', (SELECT id FROM categorias WHERE nome_categorias = 'informática'), 12000, 1.5, 1, 1 UNION ALL
+SELECT 'Aplicação de Película Protetora (Vidro/Cerâmica)', (SELECT id FROM categorias WHERE nome_categorias = 'acessórios'), 2500, 0.3, 1, 1 UNION ALL
+SELECT 'Backup de Dados Preventivo (Até 500GB)', (SELECT id FROM categorias WHERE nome_categorias = 'informática'), 8000, 2.0, 1, 1;
+
+DELETE FROM servico;
+
+DROP TRIGGER IF EXISTS trg_ai_ordem_servico_atualiza_valor_total_ordem;
+
+CREATE TRIGGER trg_ai_ordem_servico_atualiza_valor_total_ordem -- Executa antes que uma atualização seja aplicada, permitindo validação ou transformação dos dados.-- 
+AFTER INSERT ON ordem_servico
+FOR EACH ROW 
+BEGIN
+	UPDATE ordem
+	SET valor_total = valor_total + (NEW.valor_unitario * NEW.quantidade_servico)
+	WHERE id = NEW.id_ordem;
+END;
+
+INSERT INTO ordem_servico (id_ordem, id_servico, valor_unitario, quantidade_servico)
+VALUES (1, 5, (SELECT preco_base FROM servico WHERE id = 5), 1);
+
+SELECT id, nome_servico, preco_base FROM servico;
+
+CREATE TRIGGER trg_ad_ordem_servico_atualiza_valor_total_ordem --Executa após a exclusão de um registro, útil para auditorias ou limpeza de dados relacionados.-- 
+AFTER DELETE ON ordem_servico
+FOR EACH ROW 
+BEGIN 
+	UPDATE ordem
+	SET valor_total = valor_total - (OLD.valor_unitario * OLD.quantidade_servico)
+	WHERE id = OLD.id_ordem;
+END;
+
+DELETE FROM ordem_servico WHERE id=1;  -- subtrai o servico que o cliente não deseja realizar -- 
+
+CREATE TRIGGER trg_bi_verificar_estoque
+BEFORE INSERT ON ordem_peca
+FOR EACH ROW 
+WHEN (SELECT estoque_atual FROM pecas 
+BEGIN 
+	
+END
+
+
+
+
+
+
 
 
