@@ -387,12 +387,16 @@ END;
 DELETE FROM ordem_servico WHERE id=1;  -- subtrai o servico que o cliente não deseja realizar -- 
 
 CREATE TRIGGER trg_bi_verificar_estoque
-BEFORE INSERT ON ordem_peca
+BEFORE INSERT ON ordem_peca 
 FOR EACH ROW 
-WHEN (SELECT estoque_atual FROM pecas 
-BEGIN 
-	
-END
+WHEN NEW.quantidade > (SELECT estoque_atual FROM pecas WHERE id = NEW.id_peca)
+BEGIN 	
+    SELECT RAISE(ABORT, 'Operação negada: Estoque insuficiente para a peça solicitada.');
+END;
+
+
+
+
 
 
 
