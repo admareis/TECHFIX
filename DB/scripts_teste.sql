@@ -46,6 +46,7 @@ FOREIGN KEY (id_funcionario, id_funcionario_cargo) REFERENCES funcionario(id, id
 INSERT INTO cliente (nome_cliente, email, telefone, id_funcionario, id_funcionario_cargo) 
 VALUES ('João','email@email.com', '11999999999', 4, 2);
 
+-- cadastro restrito ao gerente 
 CREATE TABLE categorias (
 id INTEGER PRIMARY KEY AUTOINCREMENT,
 nome_categorias TEXT NOT NULL COLLATE NOCASE UNIQUE,
@@ -357,6 +358,35 @@ SELECT 'Troca de Teclado Interno de Notebook', (SELECT id FROM categorias WHERE 
 SELECT 'Aplicação de Película Protetora (Vidro/Cerâmica)', (SELECT id FROM categorias WHERE nome_categorias = 'acessórios'), 2500, 0.3, 1, 1 UNION ALL
 SELECT 'Backup de Dados Preventivo (Até 500GB)', (SELECT id FROM categorias WHERE nome_categorias = 'informática'), 8000, 2.0, 1, 1;
 
+-- ENTRADAS: compras/reposições de peças; histórico imutável.
+CREATE TABLE entrada_peca (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ id_peca INTEGER NOT NULL REFERENCES pecas(id),
+ quantidade INTEGER NOT NULL CHECK(quantidade > 0),
+ preco_compra INTEGER NOT NULL CHECK(preco_compra >= 0),
+ preco_venda_sugerido INTEGER NOT NULL CHECK(preco_venda_sugerido >= 0),
+ id_funcionario INTEGER NOT NULL,
+ id_funcionario_cargo INTEGER NOT NULL CHECK(id_funcionario_cargo = 1),
+ data_cadastro TEXT NOT NULL DEFAULT (DATETIME('now','localtime')),
+ FOREIGN KEY(id_funcionario,id_funcionario_cargo) REFERENCES funcionario(id,id_cargo)
+) STRICT;
+
+-- Saídas avulsas e descarte: não duplicar movimentações de ordem_peca.consumo/descarte fora da ordem, sem dupla baixa.
+CREATE TABLE saida_peca (
+id INTEGER PRIMARY KEY AUTOINCREMENT,
+id_peca INTEGER NOT NULL REFERENCES pecas(id),
+id_ordem INTEGER REFERENCES ordem(id),
+quantidade_saida INTEGER NOT NULL CHECK(quantidade_saida > 0),
+valor_saida INTEGER NOT NULL CHECK(valor_saida > 0),
+numero_serie TEXT NOT NULL COLLATE NOCASE,
+numero_lote TEXT NOT NULL COLLATE NOCASE,
+id_funcionario INTEGER NOT NULL,
+id_funcionario_cargo INTEGER NOT NULL CHECK(id_funcionario_cargo = 3),
+id_situacao INTEGER NOT NULL REFERENCES situacao(id),
+data_saida TEXT NOT NULL DEFAULT (DATETIME('now','localtime')),
+FOREIGN KEY(id_funcionario,id_funcionario_cargo) REFERENCES funcionario(id,id_cargo)
+) STRICT;
+
 DELETE FROM servico;
 
 DROP TRIGGER IF EXISTS trg_ai_ordem_servico_atualiza_valor_total_ordem;
@@ -394,14 +424,529 @@ BEGIN
     SELECT RAISE(ABORT, 'Operação negada: Estoque insuficiente para a peça solicitada.');
 END;
 
+-- triggers antigas removidas para melhor automatização do banco -- 
+
+-- Impede que o estoque fique negativo.
+CREATE TRIGGER trg_pecas_estoque_nao_negativo
+BEFORE UPDATE OF estoque_atual ON pecas
+FOR EACH ROW
+WHEN NEW.estoque_atual < 0
+BEGIN
+    SELECT RAISE(ABORT,'Estoque nao pode ser negativo');
+END;
+
+-- Verifica peça ativa, quantidade e preços.
+CREATE TRIGGER trg_entrada_valida
+BEFORE INSERT ON entrada_peca
+FOR EACH ROW
+BEGIN
+    SELECT RAISE(ABORT, 'Peca inexistente ou inativa')
+    WHERE (
+        SELECT status
+        FROM pecas
+        WHERE id = NEW.id_peca
+    ) IS NOT 1;
+
+    SELECT RAISE(ABORT, 'Quantidade deve ser positiva')
+    WHERE NEW.quantidade <= 0;
+
+    SELECT RAISE(ABORT, 'Preco de entrada invalido')
+    WHERE NEW.preco_compra < 0
+    OR NEW.preco_venda_sugerido < 0;
+END;
+
+-- Soma automaticamente a entrada ao estoque.
+CREATE TRIGGER trg_entrada_soma
+AFTER INSERT ON entrada_peca
+FOR EACH ROW
+BEGIN
+    UPDATE pecas
+    SET estoque_atual = estoque_atual + NEW.quantidade
+    WHERE id = NEW.id_peca;
+END;
+
+-- Impede modificar uma entrada já registrada.
+CREATE TRIGGER trg_entrada_nao_edita
+BEFORE UPDATE ON entrada_peca
+BEGIN
+    SELECT RAISE(ABORT,'Entrada imutavel: registre ajuste ou estorno');
+END;
+
+-- Impede apagar o histórico de entradas.
+CREATE TRIGGER trg_entrada_nao_apaga
+BEFORE DELETE ON entrada_peca
+BEGIN
+    SELECT RAISE(ABORT,'Entrada imutavel: registre ajuste ou estorno');
+END;
+
+-- Evita duplicar a baixa de peças de uma ordem.
+-- Peças usadas em OS devem ser registradas em ordem_peca.
+CREATE TRIGGER trg_saida_valida
+BEFORE INSERT ON saida_peca
+FOR EACH ROW
+BEGIN
+    SELECT RAISE(ABORT,'Saida vinculada a OS: use ordem_peca')
+    WHERE NEW.id_ordem IS NOT NULL;
+
+    SELECT RAISE(ABORT, 'Peca inexistente ou inativa')
+    WHERE (
+        SELECT status
+        FROM pecas
+        WHERE id = NEW.id_peca
+    ) IS NOT 1;
+
+    SELECT RAISE(ABORT, 'Quantidade deve ser positiva')
+    WHERE NEW.quantidade_saida <= 0;
+
+    SELECT RAISE(ABORT, 'Valor de saida deve ser positivo')
+    WHERE NEW.valor_saida <= 0;
+
+    SELECT RAISE(ABORT, 'Estoque insuficiente')
+    WHERE (
+        SELECT estoque_atual
+        FROM pecas
+        WHERE id = NEW.id_peca) < NEW.quantidade_saida;
+
+    -- Consulta o nome da situação, não um ID fixo.
+    SELECT RAISE(ABORT,'Situacao invalida para saida avulsa')
+    WHERE COALESCE(
+        (
+            SELECT nome_situacao
+            FROM situacao
+            WHERE id = NEW.id_situacao
+        ),
+        ''
+    ) NOT IN (
+        'Uso em Reparo',
+        'Descarte por Defeito/Avaria'
+    );
+END;
 
 
+-- Desconta a quantidade da saída.
+CREATE TRIGGER trg_saida_baixa
+AFTER INSERT ON saida_peca
+FOR EACH ROW
+BEGIN
+    UPDATE pecas
+    SET estoque_atual = estoque_atual - NEW.quantidade_saida
+    WHERE id = NEW.id_peca;
+END;
+
+-- Impede editar saídas já registradas.
+CREATE TRIGGER trg_saida_nao_edita
+BEFORE UPDATE ON saida_peca
+BEGIN
+    SELECT RAISE(ABORT,'Saida imutavel: registre estorno');
+END;
+
+-- Impede apagar saídas já registradas.
+CREATE TRIGGER trg_saida_nao_apaga
+BEFORE DELETE ON saida_peca
+BEGIN
+    SELECT RAISE(ABORT,'Saida imutavel: registre estorno'
+    );
+END;
+
+-- Valida a inclusão de um serviço.
+CREATE TRIGGER trg_servico_valida_insert
+BEFORE INSERT ON ordem_servico
+FOR EACH ROW
+BEGIN
+    SELECT RAISE(ABORT, 'Ordem inexistente ou encerrada')
+    WHERE (
+        SELECT data_fechamento
+        FROM ordem
+        WHERE id = NEW.id_ordem
+    ) IS NOT NULL
+    OR NOT EXISTS (
+        SELECT 1
+        FROM ordem
+        WHERE id = NEW.id_ordem
+    );
+
+    SELECT RAISE(ABORT, 'Servico inexistente ou inativo')
+    WHERE (
+        SELECT status
+        FROM servico
+        WHERE id = NEW.id_nome_servico
+    ) IS NOT 1;
+
+    SELECT RAISE(ABORT, 'Quantidade deve ser positiva')
+    WHERE NEW.quantidade <= 0;
+
+    SELECT RAISE(
+        ABORT,'Valor unitario nao pode ser negativo'
+    )
+    WHERE NEW.valor_unitario < 0;
+END;
+
+-- Valida alterações de serviços.
+CREATE TRIGGER trg_servico_valida_update
+BEFORE UPDATE ON ordem_servico
+FOR EACH ROW
+BEGIN
+    SELECT RAISE(ABORT, 'Ordem encerrada ou inexistente')
+    WHERE (
+        SELECT data_fechamento
+        FROM ordem
+        WHERE id = OLD.id_ordem
+    ) IS NOT NULL
+    OR (
+        SELECT data_fechamento
+        FROM ordem
+        WHERE id = NEW.id_ordem
+    ) IS NOT NULL
+    OR NOT EXISTS (
+        SELECT 1
+        FROM ordem
+        WHERE id = NEW.id_ordem
+    );
+
+    SELECT RAISE(ABORT,'Servico inexistente ou inativo')
+    WHERE (
+        SELECT status
+        FROM servico
+        WHERE id = NEW.id_nome_servico
+    ) IS NOT 1;
+
+    SELECT RAISE(ABORT,'Quantidade deve ser positiva')
+    WHERE NEW.quantidade <= 0;
+
+    SELECT RAISE(ABORT,'Valor unitario nao pode ser negativo')
+    WHERE NEW.valor_unitario < 0;
+END;
+
+-- Impede excluir serviços de ordens encerradas.
+CREATE TRIGGER trg_servico_valida_delete
+BEFORE DELETE ON ordem_servico
+FOR EACH ROW
+WHEN (
+    SELECT data_fechamento
+    FROM ordem
+    WHERE id = OLD.id_ordem
+) IS NOT NULL
+BEGIN
+    SELECT RAISE(ABORT, 'Ordem encerrada');
+END;
+
+-- Soma o valor do serviço ao total da ordem.
+CREATE TRIGGER trg_servico_insere
+AFTER INSERT ON ordem_servico
+FOR EACH ROW
+BEGIN
+    UPDATE ordem
+    SET valor_total = COALESCE(valor_total, 0) + NEW.valor_unitario * NEW.quantidade
+    WHERE id = NEW.id_ordem;
+END;
+
+-- Subtrai o valor do serviço excluído.
+CREATE TRIGGER trg_servico_remove
+AFTER DELETE ON ordem_servico
+FOR EACH ROW
+BEGIN
+    UPDATE ordem
+    SET valor_total = COALESCE(valor_total, 0) - OLD.valor_unitario * OLD.quantidade
+    WHERE id = OLD.id_ordem;
+END;
+
+-- Recalcula o valor ao modificar quantidade, preço ou ordem.
+CREATE TRIGGER trg_servico_altera
+AFTER UPDATE ON ordem_servico
+FOR EACH ROW
+BEGIN
+    -- Retira o valor anterior.
+    UPDATE ordem
+    SET valor_total = COALESCE(valor_total, 0) - OLD.valor_unitario * OLD.quantidade
+    WHERE id = OLD.id_ordem;
+
+    -- Acrescenta o novo valor.
+    UPDATE ordem
+    SET valor_total = COALESCE(valor_total, 0) + NEW.valor_unitario * NEW.quantidade
+    WHERE id = NEW.id_ordem;
+END;
+
+-- Verifica ordem aberta, peça ativa, quantidade e estoque.
+CREATE TRIGGER trg_ordem_peca_valida_insert
+BEFORE INSERT ON ordem_peca
+FOR EACH ROW
+BEGIN
+    SELECT RAISE(ABORT, 'Ordem inexistente ou encerrada')
+    WHERE (
+        SELECT data_fechamento
+        FROM ordem
+        WHERE id = NEW.id_ordem
+    ) IS NOT NULL
+    OR NOT EXISTS (
+        SELECT 1
+        FROM ordem
+        WHERE id = NEW.id_ordem
+    );
+
+    SELECT RAISE(ABORT, 'Peca inexistente ou inativa')
+    WHERE (
+        SELECT status
+        FROM pecas
+        WHERE id = NEW.id_peca
+    ) IS NOT 1;
+
+    SELECT RAISE(ABORT, 'Quantidade deve ser positiva')
+    WHERE NEW.quantidade <= 0;
+
+    SELECT RAISE(ABORT,'Valor unitario nao pode ser negativo')
+    WHERE NEW.valor_unitario < 0;
+
+    SELECT RAISE(ABORT, 'Estoque insuficiente')
+    WHERE (
+        SELECT estoque_atual
+        FROM pecas
+        WHERE id = NEW.id_peca) < NEW.quantidade;
+END;
+
+-- Valida alterações em peças já incluídas.
+CREATE TRIGGER trg_ordem_peca_valida_update
+BEFORE UPDATE ON ordem_peca
+FOR EACH ROW
+BEGIN
+    -- Não permite trocar diretamente a peça ou a ordem.
+    SELECT RAISE(ABORT,'Nao troque OS ou peca: exclua e insira novamente')
+    WHERE NEW.id_ordem <> OLD.id_ordem
+    OR NEW.id_peca <> OLD.id_peca;
+
+    SELECT RAISE(ABORT, 'Ordem encerrada')
+    WHERE (
+        SELECT data_fechamento
+        FROM ordem
+        WHERE id = OLD.id_ordem
+    ) IS NOT NULL;
+
+    SELECT RAISE(ABORT, 'Peca inexistente ou inativa')
+    WHERE (
+        SELECT status
+        FROM pecas
+        WHERE id = NEW.id_peca
+    ) IS NOT 1;
+
+    SELECT RAISE(ABORT, 'Quantidade deve ser positiva')
+    WHERE NEW.quantidade <= 0;
+
+    SELECT RAISE(ABORT,'Valor unitario nao pode ser negativo')
+    WHERE NEW.valor_unitario < 0;
+
+    -- Considera a quantidade antiga, já descontada.
+    SELECT RAISE(ABORT, 'Estoque insuficiente')
+    WHERE (
+        SELECT estoque_atual
+        FROM pecas
+        WHERE id = NEW.id_peca) + OLD.quantidade < NEW.quantidade;
+END;
+
+-- Impede remover peças de ordens encerradas.
+CREATE TRIGGER trg_ordem_peca_valida_delete
+BEFORE DELETE ON ordem_peca
+FOR EACH ROW
+WHEN (
+    SELECT data_fechamento
+    FROM ordem
+    WHERE id = OLD.id_ordem
+) IS NOT NULL
+BEGIN
+    SELECT RAISE(ABORT, 'Ordem encerrada');
+END;
+
+-- Baixa estoque e acrescenta o valor da peça.
+CREATE TRIGGER trg_ordem_peca_insere
+AFTER INSERT ON ordem_peca
+FOR EACH ROW
+BEGIN
+    UPDATE pecas
+    SET estoque_atual = estoque_atual - NEW.quantidade
+    WHERE id = NEW.id_peca;
+
+    UPDATE ordem
+    SET valor_total = COALESCE(valor_total, 0) + NEW.quantidade * NEW.valor_unitario
+    WHERE id = NEW.id_ordem;
+END;
+
+-- Devolve peças e subtrai o valor da ordem.
+CREATE TRIGGER trg_ordem_peca_remove
+AFTER DELETE ON ordem_peca
+FOR EACH ROW
+BEGIN
+    UPDATE pecas
+    SET estoque_atual = estoque_atual + OLD.quantidade
+    WHERE id = OLD.id_peca;
+
+    UPDATE ordem
+    SET valor_total = COALESCE(valor_total, 0) - OLD.quantidade * OLD.valor_unitario
+    WHERE id = OLD.id_ordem;
+END;
+
+-- Atualiza estoque e total após modificar uma peça.
+CREATE TRIGGER trg_ordem_peca_altera
+AFTER UPDATE ON ordem_peca
+FOR EACH ROW
+BEGIN
+    UPDATE pecas
+    SET estoque_atual = estoque_atual + OLD.quantidade - NEW.quantidade
+    WHERE id = NEW.id_peca;
+
+    UPDATE ordem
+    SET valor_total = COALESCE(valor_total, 0) - OLD.quantidade * OLD.valor_unitario + NEW.quantidade * NEW.valor_unitario
+    WHERE id = NEW.id_ordem;
+END;
+
+-- Registra a situação inicial automaticamente.
+CREATE TRIGGER trg_ordem_abertura
+AFTER INSERT ON ordem
+FOR EACH ROW
+BEGIN
+    INSERT INTO ordem_situacao (
+        id_ordem,
+        id_nova_situacao,
+        id_funcionario
+    )
+    VALUES (
+        NEW.id,
+        NEW.id_situacao_atual,
+        NEW.id_funcionario_abertura
+    );
+END;
+
+-- Registra o fechamento de uma ordem criada como entregue ou cancelada.
+CREATE TRIGGER trg_ordem_fechamento_inicial
+AFTER INSERT ON ordem
+FOR EACH ROW
+WHEN (
+    SELECT nome_situacao
+    FROM situacao
+    WHERE id = NEW.id_situacao_atual
+) IN ('Entregue', 'Cancelado')
+BEGIN
+    UPDATE ordem
+    SET data_fechamento = COALESCE(NEW.data_fechamento,DATETIME('now', 'localtime'))
+    WHERE id = NEW.id;
+END;
 
 
+-- Impede registrar novas situações em ordens encerradas.
+CREATE TRIGGER trg_ordem_situacao_valida
+BEFORE INSERT ON ordem_situacao
+FOR EACH ROW
+BEGIN
+    SELECT RAISE(
+        ABORT,
+        'Ordem inexistente ou ja encerrada'
+    )
+    WHERE NOT EXISTS (
+        SELECT 1
+        FROM ordem
+        WHERE id = NEW.id_ordem
+    )
+    OR (
+        (
+            SELECT data_fechamento
+            FROM ordem
+            WHERE id = NEW.id_ordem
+        ) IS NOT NULL
+        AND EXISTS (
+            SELECT 1
+            FROM ordem_situacao
+            WHERE id_ordem = NEW.id_ordem
+        )
+    );
+
+    -- Impede usar situações exclusivas de estoque como situação principal da ordem.
+    SELECT RAISE(ABORT,'Situacao invalida para ordem')
+    WHERE COALESCE(
+        (
+            SELECT nome_situacao
+            FROM situacao
+            WHERE id = NEW.id_nova_situacao
+        ),
+        ''
+    ) NOT IN (
+        'Aberto',
+        'Em Diagnóstico',
+        'Orçamento Aprovado',
+        'Em Reparo',
+        'Pronto',
+        'Entregue',
+        'Cancelado'
+    );
+END;
+
+-- Sincroniza a situação atual com o histórico.
+CREATE TRIGGER trg_ordem_situacao_sincroniza
+AFTER INSERT ON ordem_situacao
+FOR EACH ROW
+BEGIN
+    UPDATE ordem
+    SET id_situacao_atual = NEW.id_nova_situacao
+    WHERE id = NEW.id_ordem;
+END;
+
+-- Atualiza a data quando a ordem é entregue ou cancelada.
+CREATE TRIGGER trg_ordem_fecha
+AFTER UPDATE OF id_situacao_atual ON ordem
+FOR EACH ROW
+WHEN NEW.id_situacao_atual <> OLD.id_situacao_atual
+BEGIN
+    UPDATE ordem
+    SET data_fechamento = CASE
+        WHEN (
+            SELECT nome_situacao
+            FROM situacao
+            WHERE id = NEW.id_situacao_atual
+        ) IN ('Entregue', 'Cancelado')
+        THEN COALESCE(NEW.data_fechamento, DATETIME('now', 'localtime'))
+        ELSE NULL
+    END
+    WHERE id = NEW.id;
+END;
+
+-- Impede editar registros antigos de situação.
+CREATE TRIGGER trg_ordem_situacao_nao_edita
+BEFORE UPDATE ON ordem_situacao
+BEGIN
+    SELECT RAISE(ABORT,'Historico de situacoes imutavel');
+END;
+
+-- Impede apagar o histórico das ordens.
+CREATE TRIGGER trg_ordem_situacao_nao_apaga
+BEFORE DELETE ON ordem_situacao
+BEGIN
+    SELECT RAISE(ABORT,'Historico de situacoes imutavel');
+END;
+
+-- Exige que a nova situação esteja registrada como a última entrada do histórico.
+CREATE TRIGGER trg_ordem_situacao_sem_update_direto
+BEFORE UPDATE OF id_situacao_atual ON ordem
+FOR EACH ROW
+WHEN NEW.id_situacao_atual <> OLD.id_situacao_atual
+BEGIN
+    SELECT RAISE(ABORT,'Registre a mudanca em ordem_situacao')
+    WHERE NOT EXISTS (
+        SELECT 1
+        FROM ordem_situacao
+        WHERE id_ordem = NEW.id
+			AND id_nova_situacao = NEW.id_situacao_atual
+			AND id = (
+        SELECT MAX(id)
+            FROM ordem_situacao
+            WHERE id_ordem = NEW.id
+        )
+    );
+END;
+
+-- Impede apagar clientes com DELETE.
+-- Para desativar, utilizar UPDATE status = 0.
+CREATE TRIGGER trg_cliente_sem_delete
+BEFORE DELETE ON cliente
+BEGIN
+    SELECT RAISE(ABORT,'Use UPDATE cliente SET status = 0');
+END;
 
 
-
-
-
-
+-- falta tables de estorno e ajuste bem como as triggers correspondentes -- 
 
